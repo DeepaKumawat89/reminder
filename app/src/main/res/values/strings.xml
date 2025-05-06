@@ -1,3 +1,12 @@
 <resources>
-    <string name="app_name">reminder2</string>
+    <string name="app_name">Reminder App</string>
+    <string name="reminders_for_selected_date">Reminders for selected date:</string>
+    <string name="select_date">Select Date</string>
+    <string name="select_time">Select Time</string>
+    <string name="save_reminder">Save Reminder</string>
+    <string name="add_reminder">Add Reminder</string>
+    <string name="title">Title</string>
+    <string name="description">Description</string>
+    <string name="no_date_selected">No date selected</string>
+    <string name="no_time_selected">No time selected</string>
 </resources>
