@@ -6,7 +6,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
-import android.widget.CalendarView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -17,24 +17,31 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.prolificinteractive.materialcalendarview.CalendarDay;
+import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
+import com.prolificinteractive.materialcalendarview.OnDateSelectedListener;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements ReminderAdapter.OnReminderDeleteListener, OnDateSelectedListener {
 
     private static final int REQUEST_CODE_ADD_REMINDER = 1001;
     private static final int PERMISSION_REQUEST_CODE = 123;
 
-    private CalendarView calendarView;
+    private MaterialCalendarView calendarView;
     private RecyclerView recyclerViewReminders;
     private ReminderAdapter reminderAdapter;
     private FloatingActionButton fabAddReminder;
+    private TextView textViewNoReminders;
 
     private ReminderDatabaseHelper dbHelper;
     private Calendar selectedDate;
     private NotificationHelper notificationHelper;
+    private EventDecorator eventDecorator;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,9 +52,16 @@ public class MainActivity extends AppCompatActivity {
         calendarView = findViewById(R.id.calendarView);
         recyclerViewReminders = findViewById(R.id.recyclerViewReminders);
         fabAddReminder = findViewById(R.id.fabAddReminder);
+        textViewNoReminders = findViewById(R.id.textViewNoReminders);
 
         // Initialize database helper
         dbHelper = ReminderDatabaseHelper.getInstance(this);
+
+        // Clean up past reminders
+        int removedReminders = dbHelper.cleanupPastReminders();
+        if (removedReminders > 0) {
+            Toast.makeText(this, "Cleaned up " + removedReminders + " past reminders", Toast.LENGTH_SHORT).show();
+        }
 
         // Initialize notification helper
         notificationHelper = new NotificationHelper(this);
@@ -65,12 +79,12 @@ public class MainActivity extends AppCompatActivity {
         recyclerViewReminders.setAdapter(reminderAdapter);
 
         // Set up calendar view
-        calendarView.setOnDateChangeListener((view, year, month, dayOfMonth) -> {
-            selectedDate.set(Calendar.YEAR, year);
-            selectedDate.set(Calendar.MONTH, month);
-            selectedDate.set(Calendar.DAY_OF_MONTH, dayOfMonth);
-            loadRemindersForSelectedDate();
-        });
+        calendarView.setOnDateChangedListener(this);
+        calendarView.setSelectedDate(CalendarDay.today());
+
+        // Initialize the event decorator
+        eventDecorator = new EventDecorator(Color.RED, new HashSet<>());
+        calendarView.addDecorator(eventDecorator);
 
         // Set up FAB
         fabAddReminder.setOnClickListener(v -> {
@@ -93,7 +107,7 @@ public class MainActivity extends AppCompatActivity {
         loadRemindersForSelectedDate();
 
         // Highlight dates with reminders
-        highlightDatesWithReminders();
+        updateCalendarWithReminderDates();
 
         // Schedule notifications for all pending reminders
         notificationHelper.scheduleAllReminders();
@@ -104,7 +118,7 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         // Reload reminders when returning to the activity
         loadRemindersForSelectedDate();
-        highlightDatesWithReminders();
+        updateCalendarWithReminderDates();
     }
 
     @Override
@@ -112,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_CODE_ADD_REMINDER && resultCode == RESULT_OK) {
             loadRemindersForSelectedDate();
-            highlightDatesWithReminders();
+            updateCalendarWithReminderDates();
             Toast.makeText(this, "Reminder added successfully!", Toast.LENGTH_SHORT).show();
         }
     }
@@ -120,18 +134,55 @@ public class MainActivity extends AppCompatActivity {
     private void loadRemindersForSelectedDate() {
         List<Reminder> reminders = dbHelper.getRemindersForDate(selectedDate);
         reminderAdapter.updateReminders(reminders);
+
+        // Show/hide "No reminders" text
+        if (reminders.isEmpty()) {
+            textViewNoReminders.setVisibility(android.view.View.VISIBLE);
+            recyclerViewReminders.setVisibility(android.view.View.GONE);
+        } else {
+            textViewNoReminders.setVisibility(android.view.View.GONE);
+            recyclerViewReminders.setVisibility(android.view.View.VISIBLE);
+        }
     }
 
-    private void highlightDatesWithReminders() {
-        // This method would ideally mark dates with reminders directly on the calendar view
-        // Unfortunately, the default CalendarView doesn't support this functionality easily
-        // For a production app, consider using a third-party calendar library
-        // Instead, we'll just reload reminders when a date is selected
+    private void updateCalendarWithReminderDates() {
+        // Get all dates with reminders
+        List<Calendar> datesWithReminders = dbHelper.getDatesWithReminders();
+        Set<CalendarDay> calendarDays = new HashSet<>();
 
-        // In a real-world application, you could use a calendar library like:
-        // - Material CalendarView
-        // - Customized CalendarView
-        // - Custom calendar implementation
+        for (Calendar date : datesWithReminders) {
+            calendarDays.add(CalendarDay.from(
+                    date.get(Calendar.YEAR),
+                    date.get(Calendar.MONTH),
+                    date.get(Calendar.DAY_OF_MONTH)));
+        }
+
+        // Update decorator with new dates
+        eventDecorator.setDates(calendarDays);
+        calendarView.invalidateDecorators();
+    }
+
+    @Override
+    public void onReminderDelete(Reminder reminder) {
+        // Delete reminder from database
+        boolean success = dbHelper.deleteReminder(reminder.getId());
+        if (success) {
+            // Cancel notification
+            notificationHelper.cancelReminderNotification(reminder.getId());
+
+            // Reload UI
+            loadRemindersForSelectedDate();
+            updateCalendarWithReminderDates();
+            Toast.makeText(this, "Reminder deleted successfully", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Failed to delete reminder", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onDateSelected(@NonNull MaterialCalendarView widget, @NonNull CalendarDay date, boolean selected) {
+        selectedDate.set(date.getYear(), date.getMonth(), date.getDay());
+        loadRemindersForSelectedDate();
     }
 
     @Override

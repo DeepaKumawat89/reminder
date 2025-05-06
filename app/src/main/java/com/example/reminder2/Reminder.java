@@ -1,30 +1,37 @@
 package com.example.reminder2;
 
-
-import java.io.Serializable;
-import java.util.Calendar;
-import java.util.UUID;
-
-public class Reminder implements Serializable {
-    private String id;
+public class Reminder {
+    private int id;
     private String title;
     private String description;
-    private long dateTimeInMillis;
+    private long timeInMillis;
 
-    public Reminder() {
-        // Generate a unique ID for each reminder
-        this.id = UUID.randomUUID().toString();
-    }
-
-    public Reminder(String title, String description, long dateTimeInMillis) {
-        this();
+    public Reminder(int id, String title, String description) {
+        this.id = id;
         this.title = title;
         this.description = description;
-        this.dateTimeInMillis = dateTimeInMillis;
     }
 
-    public String getId() {
+    public Reminder(int id, String title, String description, long timeInMillis) {
+        this.id = id;
+        this.title = title;
+        this.description = description;
+        this.timeInMillis = timeInMillis;
+    }
+
+    public Reminder(String title, String description, long timeInMillis) {
+        this.id = 0; // Will be set by the database
+        this.title = title;
+        this.description = description;
+        this.timeInMillis = timeInMillis;
+    }
+
+    public int getId() {
         return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
     }
 
     public String getTitle() {
@@ -43,21 +50,11 @@ public class Reminder implements Serializable {
         this.description = description;
     }
 
-    public long getDateTimeInMillis() {
-        return dateTimeInMillis;
+    public long getTimeInMillis() {
+        return timeInMillis;
     }
 
-    public void setDateTimeInMillis(long dateTimeInMillis) {
-        this.dateTimeInMillis = dateTimeInMillis;
-    }
-
-    // Helper method to check if reminder is on a specific date
-    public boolean isOnDate(Calendar date) {
-        Calendar reminderDate = Calendar.getInstance();
-        reminderDate.setTimeInMillis(dateTimeInMillis);
-
-        return reminderDate.get(Calendar.YEAR) == date.get(Calendar.YEAR) &&
-                reminderDate.get(Calendar.MONTH) == date.get(Calendar.MONTH) &&
-                reminderDate.get(Calendar.DAY_OF_MONTH) == date.get(Calendar.DAY_OF_MONTH);
+    public void setTimeInMillis(long timeInMillis) {
+        this.timeInMillis = timeInMillis;
     }
 }

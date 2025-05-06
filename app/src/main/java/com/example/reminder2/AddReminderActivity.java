@@ -1,18 +1,14 @@
 package com.example.reminder2;
 
-import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.os.Bundle;
 import android.view.MenuItem;
 import android.widget.Button;
-import android.widget.DatePicker;
+import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.TimePicker;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
-
-import com.google.android.material.textfield.TextInputEditText;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -20,95 +16,68 @@ import java.util.Locale;
 
 public class AddReminderActivity extends AppCompatActivity {
 
-    private TextInputEditText editTextTitle;
-    private TextInputEditText editTextDescription;
-    private Button buttonPickDate;
-    private Button buttonPickTime;
+    private EditText editTextTitle;
+    private EditText editTextDescription;
     private TextView textViewSelectedDate;
-    private TextView textViewSelectedTime;
-    private Button buttonSubmit;
+    private Button buttonSelectTime;
+    private Button buttonSave;
 
     private Calendar selectedDateTime;
-    private ReminderDatabaseHelper dbHelper;
-    private NotificationHelper notificationHelper;
-    private SimpleDateFormat dateFormat;
-    private SimpleDateFormat timeFormat;
+    private final SimpleDateFormat dateFormat = new SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault());
+    private final SimpleDateFormat timeFormat = new SimpleDateFormat("hh:mm a", Locale.getDefault());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_add_reminder);
 
-        // Set up action bar with back button
+        // Enable back button in action bar
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setTitle("Add Reminder");
+            getSupportActionBar().setTitle("Add New Reminder");
         }
 
         // Initialize views
         editTextTitle = findViewById(R.id.editTextTitle);
         editTextDescription = findViewById(R.id.editTextDescription);
-        buttonPickDate = findViewById(R.id.buttonPickDate);
-        buttonPickTime = findViewById(R.id.buttonPickTime);
         textViewSelectedDate = findViewById(R.id.textViewSelectedDate);
-        textViewSelectedTime = findViewById(R.id.textViewSelectedTime);
-        buttonSubmit = findViewById(R.id.buttonSubmit);
+        buttonSelectTime = findViewById(R.id.buttonSelectTime);
+        buttonSave = findViewById(R.id.buttonSave);
 
-        // Initialize helpers
-        dbHelper = ReminderDatabaseHelper.getInstance(this);
-        notificationHelper = new NotificationHelper(this);
-
-        // Format for displaying date and time
-        dateFormat = new SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault());
-        timeFormat = new SimpleDateFormat("h:mm a", Locale.getDefault());
-
-        // Initialize date time
+        // Get the selected date from the intent
+        long selectedDateMillis = getIntent().getLongExtra("selected_date", System.currentTimeMillis());
         selectedDateTime = Calendar.getInstance();
+        selectedDateTime.setTimeInMillis(selectedDateMillis);
 
-        // If there's a date passed from the main activity
-        long selectedDateMillis = getIntent().getLongExtra("selected_date", -1);
-        if (selectedDateMillis != -1) {
-            selectedDateTime.setTimeInMillis(selectedDateMillis);
-        }
+        // Set the current time
+        Calendar now = Calendar.getInstance();
+        selectedDateTime.set(Calendar.HOUR_OF_DAY, now.get(Calendar.HOUR_OF_DAY));
+        selectedDateTime.set(Calendar.MINUTE, now.get(Calendar.MINUTE));
 
-        // Set time to current time + 1 hour by default
-        selectedDateTime.add(Calendar.HOUR_OF_DAY, 1);
+        // Update the date text
+        updateDateTimeText();
 
-        // Update displayed date and time
-        updateDateDisplay();
-        updateTimeDisplay();
+        // Set up the time picker button
+        buttonSelectTime.setOnClickListener(v -> showTimePickerDialog());
 
-        // Set up click listeners
-        buttonPickDate.setOnClickListener(v -> showDatePicker());
-        buttonPickTime.setOnClickListener(v -> showTimePicker());
-        buttonSubmit.setOnClickListener(v -> saveReminder());
+        // Set up the save button
+        buttonSave.setOnClickListener(v -> saveReminder());
     }
 
-    private void showDatePicker() {
-        DatePickerDialog datePickerDialog = new DatePickerDialog(
-                this,
-                (view, year, month, dayOfMonth) -> {
-                    selectedDateTime.set(Calendar.YEAR, year);
-                    selectedDateTime.set(Calendar.MONTH, month);
-                    selectedDateTime.set(Calendar.DAY_OF_MONTH, dayOfMonth);
-                    updateDateDisplay();
-                },
-                selectedDateTime.get(Calendar.YEAR),
-                selectedDateTime.get(Calendar.MONTH),
-                selectedDateTime.get(Calendar.DAY_OF_MONTH)
-        );
-        datePickerDialog.getDatePicker().setMinDate(System.currentTimeMillis() - 1000);
-        datePickerDialog.show();
+    private void updateDateTimeText() {
+        String dateStr = dateFormat.format(selectedDateTime.getTime());
+        String timeStr = timeFormat.format(selectedDateTime.getTime());
+        textViewSelectedDate.setText(String.format("Date: %s\nTime: %s", dateStr, timeStr));
+        buttonSelectTime.setText(timeStr);
     }
 
-    private void showTimePicker() {
+    private void showTimePickerDialog() {
         TimePickerDialog timePickerDialog = new TimePickerDialog(
                 this,
                 (view, hourOfDay, minute) -> {
                     selectedDateTime.set(Calendar.HOUR_OF_DAY, hourOfDay);
                     selectedDateTime.set(Calendar.MINUTE, minute);
-                    selectedDateTime.set(Calendar.SECOND, 0);
-                    updateTimeDisplay();
+                    updateDateTimeText();
                 },
                 selectedDateTime.get(Calendar.HOUR_OF_DAY),
                 selectedDateTime.get(Calendar.MINUTE),
@@ -117,41 +86,32 @@ public class AddReminderActivity extends AppCompatActivity {
         timePickerDialog.show();
     }
 
-    private void updateDateDisplay() {
-        textViewSelectedDate.setText(dateFormat.format(selectedDateTime.getTime()));
-    }
-
-    private void updateTimeDisplay() {
-        textViewSelectedTime.setText(timeFormat.format(selectedDateTime.getTime()));
-    }
-
     private void saveReminder() {
-        String title = editTextTitle.getText() != null ? editTextTitle.getText().toString().trim() : "";
-        String description = editTextDescription.getText() != null ? editTextDescription.getText().toString().trim() : "";
+        String title = editTextTitle.getText().toString().trim();
+        String description = editTextDescription.getText().toString().trim();
 
         // Validate input
         if (title.isEmpty()) {
-            Toast.makeText(this, "Please enter a title", Toast.LENGTH_SHORT).show();
+            editTextTitle.setError("Title is required");
             return;
         }
 
-        // Check if the selected time is in the past
-        if (selectedDateTime.getTimeInMillis() < System.currentTimeMillis()) {
-            Toast.makeText(this, "Please select a future time", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        // Create reminder object
+        // Create a new reminder
         Reminder reminder = new Reminder(title, description, selectedDateTime.getTimeInMillis());
 
         // Save to database
-        long result = dbHelper.addReminder(reminder);
+        ReminderDatabaseHelper dbHelper = ReminderDatabaseHelper.getInstance(this);
+        long id = dbHelper.addReminder(reminder);
 
-        if (result != -1) {
+        if (id > 0) {
+            // Set the ID for the reminder (needed for notifications)
+            reminder.setId((int) id);
+
             // Schedule notification
-            notificationHelper.scheduleNotification(reminder);
+            NotificationHelper notificationHelper = new NotificationHelper(this);
+            notificationHelper.scheduleReminder(reminder);
 
-            // Return to main activity
+            // Return result and close activity
             setResult(RESULT_OK);
             finish();
         } else {

@@ -7,8 +7,8 @@ import android.content.Intent;
 public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (intent.getAction() != null && intent.getAction().equals(Intent.ACTION_BOOT_COMPLETED)) {
-            // Reschedule all notifications after device reboot
+        if (intent.getAction() != null && intent.getAction().equals("android.intent.action.BOOT_COMPLETED")) {
+            // Reschedule all pending alarms
             NotificationHelper notificationHelper = new NotificationHelper(context);
             notificationHelper.scheduleAllReminders();
         }

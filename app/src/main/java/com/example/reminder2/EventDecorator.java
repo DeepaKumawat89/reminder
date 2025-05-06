@@ -1,6 +1,7 @@
 package com.example.reminder2;
 
 import android.graphics.Color;
+import android.text.style.ForegroundColorSpan;
 
 import com.prolificinteractive.materialcalendarview.CalendarDay;
 import com.prolificinteractive.materialcalendarview.DayViewDecorator;
@@ -11,6 +12,7 @@ import java.util.Collection;
 import java.util.HashSet;
 
 public class EventDecorator implements DayViewDecorator {
+
     private final int color;
     private final HashSet<CalendarDay> dates;
 
@@ -26,6 +28,15 @@ public class EventDecorator implements DayViewDecorator {
 
     @Override
     public void decorate(DayViewFacade view) {
-        view.addSpan(new DotSpan(8, color));
+        view.addSpan(new DotSpan(5, color));
+    }
+
+    public void addDate(CalendarDay day) {
+        dates.add(day);
+    }
+
+    public void setDates(Collection<CalendarDay> dates) {
+        this.dates.clear();
+        this.dates.addAll(dates);
     }
 }

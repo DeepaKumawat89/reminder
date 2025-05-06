@@ -1,6 +1,5 @@
 package com.example.reminder2;
 
-
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
@@ -9,17 +8,22 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 
 public class ReminderDatabaseHelper extends SQLiteOpenHelper {
-    private static final String DATABASE_NAME = "reminders.db";
+
+    private static final String DATABASE_NAME = "ReminderApp.db";
     private static final int DATABASE_VERSION = 1;
 
-    public static final String TABLE_REMINDERS = "reminders";
-    public static final String COLUMN_ID = "id";
-    public static final String COLUMN_TITLE = "title";
-    public static final String COLUMN_DESCRIPTION = "description";
-    public static final String COLUMN_DATETIME = "datetime";
+    // Table name
+    private static final String TABLE_REMINDERS = "reminders";
+
+    // Table columns
+    private static final String COLUMN_ID = "id";
+    private static final String COLUMN_TITLE = "title";
+    private static final String COLUMN_DESCRIPTION = "description";
+    private static final String COLUMN_TIME_MILLIS = "time_millis";
 
     // Singleton instance
     private static ReminderDatabaseHelper instance;
@@ -37,12 +41,12 @@ public class ReminderDatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        String CREATE_REMINDERS_TABLE = "CREATE TABLE " + TABLE_REMINDERS + "("
-                + COLUMN_ID + " TEXT PRIMARY KEY,"
-                + COLUMN_TITLE + " TEXT,"
-                + COLUMN_DESCRIPTION + " TEXT,"
-                + COLUMN_DATETIME + " INTEGER" + ")";
-        db.execSQL(CREATE_REMINDERS_TABLE);
+        String createTableQuery = "CREATE TABLE " + TABLE_REMINDERS + " (" +
+                COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COLUMN_TITLE + " TEXT, " +
+                COLUMN_DESCRIPTION + " TEXT, " +
+                COLUMN_TIME_MILLIS + " INTEGER)";
+        db.execSQL(createTableQuery);
     }
 
     @Override
@@ -51,34 +55,33 @@ public class ReminderDatabaseHelper extends SQLiteOpenHelper {
         onCreate(db);
     }
 
-    // Add a new reminder
     public long addReminder(Reminder reminder) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
-        values.put(COLUMN_ID, reminder.getId());
         values.put(COLUMN_TITLE, reminder.getTitle());
         values.put(COLUMN_DESCRIPTION, reminder.getDescription());
-        values.put(COLUMN_DATETIME, reminder.getDateTimeInMillis());
+        values.put(COLUMN_TIME_MILLIS, reminder.getTimeInMillis());
 
-        long result = db.insert(TABLE_REMINDERS, null, values);
+        long id = db.insert(TABLE_REMINDERS, null, values);
         db.close();
-        return result;
+        return id;
     }
 
-    // Get all reminders
     public List<Reminder> getAllReminders() {
         List<Reminder> reminderList = new ArrayList<>();
-        String selectQuery = "SELECT * FROM " + TABLE_REMINDERS + " ORDER BY " + COLUMN_DATETIME + " ASC";
+        String selectQuery = "SELECT * FROM " + TABLE_REMINDERS + " ORDER BY " + COLUMN_TIME_MILLIS + " ASC";
 
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor cursor = db.rawQuery(selectQuery, null);
 
         if (cursor.moveToFirst()) {
             do {
-                Reminder reminder = new Reminder();
-                reminder.setTitle(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TITLE)));
-                reminder.setDescription(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DESCRIPTION)));
-                reminder.setDateTimeInMillis(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_DATETIME)));
+                int id = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_ID));
+                String title = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TITLE));
+                String description = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DESCRIPTION));
+                long timeMillis = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_TIME_MILLIS));
+
+                Reminder reminder = new Reminder(id, title, description, timeMillis);
                 reminderList.add(reminder);
             } while (cursor.moveToNext());
         }
@@ -88,78 +91,100 @@ public class ReminderDatabaseHelper extends SQLiteOpenHelper {
         return reminderList;
     }
 
-    // Get reminders for a specific date
     public List<Reminder> getRemindersForDate(Calendar date) {
-        List<Reminder> allReminders = getAllReminders();
-        List<Reminder> dateReminders = new ArrayList<>();
+        List<Reminder> reminderList = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
 
-        for (Reminder reminder : allReminders) {
-            if (reminder.isOnDate(date)) {
-                dateReminders.add(reminder);
-            }
-        }
+        // Calculate start and end of the day
+        Calendar startOfDay = (Calendar) date.clone();
+        startOfDay.set(Calendar.HOUR_OF_DAY, 0);
+        startOfDay.set(Calendar.MINUTE, 0);
+        startOfDay.set(Calendar.SECOND, 0);
+        startOfDay.set(Calendar.MILLISECOND, 0);
 
-        return dateReminders;
-    }
-
-    // Get all dates that have reminders
-    public List<Calendar> getDatesWithReminders() {
-        List<Reminder> allReminders = getAllReminders();
-        List<Calendar> dates = new ArrayList<>();
-
-        for (Reminder reminder : allReminders) {
-            Calendar calendar = Calendar.getInstance();
-            calendar.setTimeInMillis(reminder.getDateTimeInMillis());
-
-            // Reset time part
-            calendar.set(Calendar.HOUR_OF_DAY, 0);
-            calendar.set(Calendar.MINUTE, 0);
-            calendar.set(Calendar.SECOND, 0);
-            calendar.set(Calendar.MILLISECOND, 0);
-
-            // Check if this date is already in our list
-            boolean dateExists = false;
-            for (Calendar existingDate : dates) {
-                if (existingDate.get(Calendar.YEAR) == calendar.get(Calendar.YEAR) &&
-                        existingDate.get(Calendar.MONTH) == calendar.get(Calendar.MONTH) &&
-                        existingDate.get(Calendar.DAY_OF_MONTH) == calendar.get(Calendar.DAY_OF_MONTH)) {
-                    dateExists = true;
-                    break;
-                }
-            }
-
-            if (!dateExists) {
-                dates.add(calendar);
-            }
-        }
-
-        return dates;
-    }
-
-    // Get pending reminders (reminders that haven't occurred yet)
-    public List<Reminder> getPendingReminders() {
-        List<Reminder> pendingReminders = new ArrayList<>();
-        long currentTime = System.currentTimeMillis();
+        Calendar endOfDay = (Calendar) startOfDay.clone();
+        endOfDay.add(Calendar.DAY_OF_MONTH, 1);
 
         String selectQuery = "SELECT * FROM " + TABLE_REMINDERS +
-                " WHERE " + COLUMN_DATETIME + " > " + currentTime +
-                " ORDER BY " + COLUMN_DATETIME + " ASC";
+                " WHERE " + COLUMN_TIME_MILLIS + " >= ? AND " + COLUMN_TIME_MILLIS + " < ?" +
+                " ORDER BY " + COLUMN_TIME_MILLIS + " ASC";
 
-        SQLiteDatabase db = this.getReadableDatabase();
-        Cursor cursor = db.rawQuery(selectQuery, null);
+        Cursor cursor = db.rawQuery(selectQuery,
+                new String[]{String.valueOf(startOfDay.getTimeInMillis()),
+                        String.valueOf(endOfDay.getTimeInMillis())});
 
         if (cursor.moveToFirst()) {
             do {
-                Reminder reminder = new Reminder();
-                reminder.setTitle(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TITLE)));
-                reminder.setDescription(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DESCRIPTION)));
-                reminder.setDateTimeInMillis(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_DATETIME)));
-                pendingReminders.add(reminder);
+                int id = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_ID));
+                String title = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TITLE));
+                String description = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DESCRIPTION));
+                long timeMillis = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_TIME_MILLIS));
+
+                Reminder reminder = new Reminder(id, title, description, timeMillis);
+                reminderList.add(reminder);
             } while (cursor.moveToNext());
         }
 
         cursor.close();
         db.close();
-        return pendingReminders;
+        return reminderList;
+    }
+
+    public boolean deleteReminder(int reminderId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int rowsAffected = db.delete(TABLE_REMINDERS, COLUMN_ID + " = ?",
+                new String[]{String.valueOf(reminderId)});
+        db.close();
+        return rowsAffected > 0;
+    }
+
+    public int cleanupPastReminders() {
+        SQLiteDatabase db = this.getWritableDatabase();
+        long currentTimeMillis = System.currentTimeMillis();
+
+        int rowsAffected = db.delete(TABLE_REMINDERS,
+                COLUMN_TIME_MILLIS + " < ?",
+                new String[]{String.valueOf(currentTimeMillis)});
+
+        db.close();
+        return rowsAffected;
+    }
+
+    public List<Calendar> getDatesWithReminders() {
+        List<Calendar> dates = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        String selectQuery = "SELECT DISTINCT " + COLUMN_TIME_MILLIS + " FROM " + TABLE_REMINDERS;
+        Cursor cursor = db.rawQuery(selectQuery, null);
+
+        if (cursor.moveToFirst()) {
+            do {
+                long timeMillis = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_TIME_MILLIS));
+                Calendar calendar = Calendar.getInstance();
+                calendar.setTimeInMillis(timeMillis);
+                // Normalize to start of day
+                calendar.set(Calendar.HOUR_OF_DAY, 0);
+                calendar.set(Calendar.MINUTE, 0);
+                calendar.set(Calendar.SECOND, 0);
+                calendar.set(Calendar.MILLISECOND, 0);
+
+                // Check if this date is already in our list
+                boolean dateExists = false;
+                for (Calendar existingDate : dates) {
+                    if (existingDate.getTimeInMillis() == calendar.getTimeInMillis()) {
+                        dateExists = true;
+                        break;
+                    }
+                }
+
+                if (!dateExists) {
+                    dates.add(calendar);
+                }
+            } while (cursor.moveToNext());
+        }
+
+        cursor.close();
+        db.close();
+        return dates;
     }
 }

@@ -1,6 +1,5 @@
 package com.example.reminder2;
 
-
 import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -9,106 +8,99 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
-
 import java.util.List;
 
 public class NotificationHelper {
-    private static final String CHANNEL_ID = "reminder_notification_channel";
+
+    private static final String CHANNEL_ID = "reminder_channel";
     private static final String CHANNEL_NAME = "Reminders";
     private static final String CHANNEL_DESCRIPTION = "Notifications for upcoming reminders";
 
-    private Context context;
+    private final Context context;
+    private final AlarmManager alarmManager;
 
     public NotificationHelper(Context context) {
         this.context = context;
+        this.alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         createNotificationChannel();
     }
 
     private void createNotificationChannel() {
-        // Create the notification channel for Android O and above
+        // Create the notification channel for Android Oreo and above
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
                     CHANNEL_NAME,
-                    NotificationManager.IMPORTANCE_DEFAULT
+                    NotificationManager.IMPORTANCE_HIGH
             );
             channel.setDescription(CHANNEL_DESCRIPTION);
 
             NotificationManager notificationManager = context.getSystemService(NotificationManager.class);
-            notificationManager.createNotificationChannel(channel);
-        }
-    }
-
-    public void scheduleNotification(Reminder reminder) {
-        // Create intent for the notification
-        Intent intent = new Intent(context, ReminderNotificationReceiver.class);
-        intent.putExtra("title", reminder.getTitle());
-        intent.putExtra("description", reminder.getDescription());
-        intent.putExtra("notificationId", reminder.getId().hashCode());
-
-        // Create pending intent
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                context,
-                reminder.getId().hashCode(),
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        // Get alarm manager and schedule the notification
-        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-
-        // Schedule the alarm at the exact time of the reminder
-        if (alarmManager != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        reminder.getDateTimeInMillis(),
-                        pendingIntent
-                );
-            } else {
-                alarmManager.setExact(
-                        AlarmManager.RTC_WAKEUP,
-                        reminder.getDateTimeInMillis(),
-                        pendingIntent
-                );
+            if (notificationManager != null) {
+                notificationManager.createNotificationChannel(channel);
             }
         }
     }
 
-    public void scheduleAllReminders() {
-        ReminderDatabaseHelper dbHelper = ReminderDatabaseHelper.getInstance(context);
-        List<Reminder> pendingReminders = dbHelper.getPendingReminders();
+    public void scheduleReminder(Reminder reminder) {
+        Intent intent = new Intent(context, ReminderReceiver.class);
+        intent.putExtra("reminder_id", reminder.getId());
+        intent.putExtra("title", reminder.getTitle());
+        intent.putExtra("description", reminder.getDescription());
 
-        for (Reminder reminder : pendingReminders) {
-            scheduleNotification(reminder);
+        // Create a unique request code based on the reminder ID
+        int requestCode = reminder.getId();
+
+        // Create the pending intent
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+        );
+
+        // Schedule the alarm
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    reminder.getTimeInMillis(),
+                    pendingIntent
+            );
+        } else {
+            alarmManager.setExact(
+                    AlarmManager.RTC_WAKEUP,
+                    reminder.getTimeInMillis(),
+                    pendingIntent
+            );
         }
     }
 
-    public void showNotification(String title, String content, int notificationId) {
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                .setContentTitle(title)
-                .setContentText(content)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setAutoCancel(true);
-
-        Intent intent = new Intent(context, MainActivity.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(
+    public void cancelReminderNotification(int reminderId) {
+        Intent intent = new Intent(context, ReminderReceiver.class);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
                 context,
-                0,
+                reminderId,
                 intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
-        builder.setContentIntent(pendingIntent);
 
-        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(context);
-        try {
-            notificationManager.notify(notificationId, builder.build());
-        } catch (SecurityException e) {
-            // Handle case where notification permission is not granted
-            e.printStackTrace();
+        // Cancel the pending intent
+        alarmManager.cancel(pendingIntent);
+        pendingIntent.cancel();
+    }
+
+    public void scheduleAllReminders() {
+        // Get all future reminders
+        ReminderDatabaseHelper dbHelper = ReminderDatabaseHelper.getInstance(context);
+        List<Reminder> reminders = dbHelper.getAllReminders();
+
+        long currentTime = System.currentTimeMillis();
+
+        for (Reminder reminder : reminders) {
+            // Only schedule future reminders
+            if (reminder.getTimeInMillis() > currentTime) {
+                scheduleReminder(reminder);
+            }
         }
     }
 }

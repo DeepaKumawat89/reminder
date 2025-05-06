@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/background_color"
     tools:context=".MainActivity">
 
     <LinearLayout
@@ -11,25 +12,48 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <CalendarView
-            android:id="@+id/calendarView"
+        <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+            android:layout_margin="8dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp">
+
+            <com.prolificinteractive.materialcalendarview.MaterialCalendarView
+                android:id="@+id/calendarView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:mcv_selectionColor="@color/accent_color"
+                app:mcv_showOtherDates="all" />
+
+        </androidx.cardview.widget.CardView>
 
         <TextView
             android:id="@+id/textViewReminders"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="16dp"
-            android:text="Reminders for selected date:"
-            android:textSize="18sp"
+            android:text="Reminders"
+            android:textColor="@color/text_primary"
+            android:textSize="20sp"
             android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/textViewNoReminders"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:padding="32dp"
+            android:text="No reminders for this date"
+            android:textColor="@color/text_secondary"
+            android:textSize="16sp"
+            android:visibility="gone" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerViewReminders"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:clipToPadding="false"
             android:padding="8dp" />
 
     </LinearLayout>
@@ -41,6 +65,7 @@
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
         android:contentDescription="Add Reminder"
-        android:src="@drawable/ic_add" />
-
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+        android:src="@drawable/ic_add"
+        app:backgroundTint="@color/accent_color"
+        app:tint="@android:color/white" />
+    </androidx.coordinatorlayout.widget.CoordinatorLayout>

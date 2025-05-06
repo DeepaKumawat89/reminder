@@ -14,6 +14,7 @@ public class ReminderNotificationReceiver extends BroadcastReceiver {
 
         // Show the notification
         NotificationHelper notificationHelper = new NotificationHelper(context);
-        notificationHelper.showNotification(title, description, notificationId);
+        Reminder reminder=new Reminder(title,description,notificationId);
+        notificationHelper.scheduleReminder(reminder);
     }
 }
